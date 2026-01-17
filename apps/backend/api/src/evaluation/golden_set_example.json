@@ -1,0 +1,27 @@
+{
+  "name": "SOP RAG Golden Set v1",
+  "description": "Test queries for evaluating retrieval quality",
+  "queries": [
+    {
+      "query_id": "q001",
+      "query": "What is the procedure for emergency shutdown?",
+      "expected_doc_ids": ["sop_emergency_001", "sop_safety_002"],
+      "expected_answer_contains": ["shutdown", "emergency", "procedure"],
+      "tags": ["safety", "emergency"]
+    },
+    {
+      "query_id": "q002", 
+      "query": "How do I calibrate the pressure sensor?",
+      "expected_doc_ids": ["sop_calibration_001"],
+      "expected_answer_contains": ["calibrate", "pressure", "sensor"],
+      "tags": ["calibration", "sensors"]
+    },
+    {
+      "query_id": "q003",
+      "query": "What PPE is required for chemical handling?",
+      "expected_doc_ids": ["sop_ppe_001", "sop_chemical_001"],
+      "expected_answer_contains": ["PPE", "gloves", "goggles"],
+      "tags": ["safety", "ppe"]
+    }
+  ]
+}

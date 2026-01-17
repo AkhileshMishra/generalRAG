@@ -2,10 +2,14 @@
 Gemini Vision Module
 
 Handles vision-to-text conversion for tables and figures using Gemini API.
-Crops regions from PDF pages and sends to Gemini for:
-- Table → HTML/Markdown transcription
-- Figure/Flowchart → Dense step-by-step caption
-- Scanned page → OCR text
+
+CRITICAL: Never upload full PDFs to Gemini. Always:
+1. Split PDF into pages
+2. Render pages as images
+3. Crop regions (tables/figures)
+4. Send individual images to Gemini
+
+Gemini PDF limits: 50MB / 1000 pages - our corpus is 1-2GB per file.
 """
 import os
 import io
@@ -16,6 +20,10 @@ import httpx
 from PIL import Image
 import fitz
 
+from shared.config.settings import get_config
+
+config = get_config()
+
 @dataclass
 class VisionResult:
     element_id: str
@@ -24,19 +32,38 @@ class VisionResult:
     confidence: float
 
 class GeminiVision:
-    """Gemini Vision API client for document understanding."""
+    """
+    Gemini Vision API client for document understanding.
     
-    GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    IMPORTANT: This class ONLY accepts image bytes, never PDFs.
+    The ingestion pipeline must:
+    1. split_pdf() -> page batches
+    2. render_page() -> PNG bytes
+    3. crop_region() -> PNG bytes for tables/figures
+    4. Call this class with image bytes only
+    """
+    
+    GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
     
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.model = config.gemini.vision_model
+        self.max_image_size = config.gemini.max_image_size_mb * 1024 * 1024
     
     async def process_table(
         self, 
         image_bytes: bytes,
         element_id: str
     ) -> VisionResult:
-        """Convert table image to HTML/Markdown."""
+        """
+        Convert table image to HTML/Markdown.
+        
+        Args:
+            image_bytes: PNG/JPEG bytes of cropped table region
+            element_id: Element identifier
+        """
+        self._validate_image_size(image_bytes)
+        
         prompt = """Analyze this table image and convert it to HTML format.
         
 Requirements:
@@ -61,7 +88,15 @@ Output only the HTML table, no explanation."""
         image_bytes: bytes,
         element_id: str
     ) -> VisionResult:
-        """Generate dense caption for figure/flowchart."""
+        """
+        Generate dense caption for figure/flowchart.
+        
+        Args:
+            image_bytes: PNG/JPEG bytes of cropped figure region
+            element_id: Element identifier
+        """
+        self._validate_image_size(image_bytes)
+        
         prompt = """Describe this figure/diagram in detail.
 
 Requirements:
@@ -87,7 +122,15 @@ Provide a comprehensive description that would allow someone to understand the f
         image_bytes: bytes,
         element_id: str
     ) -> VisionResult:
-        """OCR scanned page using Gemini."""
+        """
+        OCR scanned page using Gemini.
+        
+        Args:
+            image_bytes: PNG bytes of rendered page (NOT PDF)
+            element_id: Element identifier
+        """
+        self._validate_image_size(image_bytes)
+        
         prompt = """Extract all text from this scanned document page.
 
 Requirements:
@@ -108,8 +151,16 @@ Output the extracted text with proper formatting."""
             confidence=0.8
         )
     
+    def _validate_image_size(self, image_bytes: bytes):
+        """Ensure image is within Gemini limits."""
+        if len(image_bytes) > self.max_image_size:
+            raise ValueError(
+                f"Image too large: {len(image_bytes) / 1024 / 1024:.1f}MB > "
+                f"{config.gemini.max_image_size_mb}MB limit"
+            )
+    
     async def _call_gemini(self, image_bytes: bytes, prompt: str) -> str:
-        """Make API call to Gemini."""
+        """Make API call to Gemini with image bytes (never PDF)."""
         image_b64 = base64.b64encode(image_bytes).decode()
         
         payload = {
@@ -130,11 +181,10 @@ Output the extracted text with proper formatting."""
             }
         }
         
+        url = f"{self.GEMINI_API_URL}/{self.model}:generateContent?key={self.api_key}"
+        
         async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(
-                f"{self.GEMINI_API_URL}?key={self.api_key}",
-                json=payload
-            )
+            response = await client.post(url, json=payload)
             response.raise_for_status()
             
             data = response.json()
@@ -147,25 +197,31 @@ Output the extracted text with proper formatting."""
         bbox: List[float],
         dpi: int = 150
     ) -> bytes:
-        """Crop a region from PDF page and return as PNG bytes."""
+        """
+        Crop a region from PDF page and return as PNG bytes.
+        
+        This renders the page first, then crops - never sends PDF to Gemini.
+        """
         doc = fitz.open(pdf_path)
         page = doc[page_number]
         
-        # Convert bbox to fitz.Rect
         rect = fitz.Rect(bbox)
-        
-        # Render at higher DPI for better quality
         mat = fitz.Matrix(dpi / 72, dpi / 72)
-        clip = rect
         
-        pix = page.get_pixmap(matrix=mat, clip=clip)
+        pix = page.get_pixmap(matrix=mat, clip=rect)
         img_bytes = pix.tobytes("png")
         
         doc.close()
+        
+        self._validate_image_size(img_bytes)
         return img_bytes
     
     def render_page(self, pdf_path: str, page_number: int, dpi: int = 150) -> bytes:
-        """Render full page as PNG."""
+        """
+        Render full page as PNG bytes.
+        
+        Use this for scanned page OCR - sends image to Gemini, not PDF.
+        """
         doc = fitz.open(pdf_path)
         page = doc[page_number]
         
@@ -174,4 +230,6 @@ Output the extracted text with proper formatting."""
         img_bytes = pix.tobytes("png")
         
         doc.close()
+        
+        self._validate_image_size(img_bytes)
         return img_bytes

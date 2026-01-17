@@ -2,13 +2,22 @@
 PDF Splitting Module for Large Documents
 
 Splits 1-2GB PDFs into manageable batches (2-20 pages) for reliable processing.
-Uses Unstructured's split_pdf_page and split_pdf_concurrency_level.
+Uses configurable batch size and concurrency from settings.
+
+CRITICAL: This is required because:
+1. Gemini PDF upload limit is 50MB/1000 pages - our files are 1-2GB
+2. Unstructured can timeout/OOM on huge files
+3. Allows partial failure recovery
 """
 import os
 import tempfile
 from typing import List, Tuple, Generator
 from dataclasses import dataclass
 import fitz  # PyMuPDF
+
+from shared.config.settings import get_config
+
+config = get_config()
 
 @dataclass
 class PDFBatch:
@@ -19,17 +28,16 @@ class PDFBatch:
     page_count: int
 
 class PDFSplitter:
-    """Splits large PDFs into batches for parallel processing."""
+    """
+    Splits large PDFs into batches for parallel processing.
     
-    def __init__(
-        self,
-        batch_size: int = 10,
-        max_batch_size: int = 20,
-        min_batch_size: int = 2
-    ):
-        self.batch_size = batch_size
-        self.max_batch_size = max_batch_size
-        self.min_batch_size = min_batch_size
+    Config-driven batch size and concurrency from settings.py
+    """
+    
+    def __init__(self):
+        self.batch_size = config.ingestion.batch_size
+        self.max_batch_size = config.ingestion.max_batch_size
+        self.min_batch_size = config.ingestion.min_batch_size
     
     def split(self, pdf_path: str, output_dir: str = None) -> List[PDFBatch]:
         """

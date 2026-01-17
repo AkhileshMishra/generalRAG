@@ -82,16 +82,19 @@ async def chat(
 
 @router.post("/stream")
 async def chat_stream(
+    req: Request,
     request: ChatRequest,
     current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
-    """Streaming chat endpoint for real-time responses."""
-    from fastapi.responses import StreamingResponse
+    """Streaming chat endpoint with SSE for real-time responses."""
+    from src.streaming.sse import stream_response
     
     user_id = current_user["user_id"] if current_user else None
+    tenant_id = current_user.get("tenant_id") if current_user else None
     
     yql, ranking_features = query_builder.build_rag_query(
         query_text=request.message,
+        tenant_id=tenant_id,
         user_id=user_id if request.include_private else None,
         include_global=True
     )
@@ -99,12 +102,19 @@ async def chat_stream(
     results = await vespa_client.query(yql, ranking_features)
     context, image_crops = context_packer.pack(results)
     
+    citations = [
+        {"doc_id": r["doc_id"], "page": r["page_number"], "text": r["content_text"][:200]}
+        for r in results[:5]
+    ]
+    
     async def generate():
         async for chunk in gemini_client.generate_stream(
             query=request.message,
             context=context,
             image_crops=image_crops
         ):
-            yield f"data: {chunk}\n\n"
+            if await req.is_disconnected():
+                break
+            yield chunk
     
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return await stream_response(generate(), citations)

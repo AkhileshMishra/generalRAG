@@ -1,11 +1,39 @@
 schema sop_elements {
     document sop_elements {
+        # === IDENTIFIERS ===
         field doc_id type string {
             indexing: summary | attribute
+            attribute: fast-search
         }
         field element_id type string {
             indexing: summary | attribute
         }
+        
+        # === MULTI-TENANCY (future-proof) ===
+        field tenant_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+            match: exact
+        }
+        field workspace_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+            match: exact
+        }
+        
+        # === ACCESS CONTROL (query-time filtering) ===
+        field access_scope type string {
+            indexing: summary | attribute
+            attribute: fast-search
+            match: exact
+        }
+        field owner_user_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+            match: exact
+        }
+        
+        # === CONTENT ===
         field element_type type string {
             indexing: summary | attribute
             attribute: fast-search
@@ -13,6 +41,7 @@ schema sop_elements {
         field content_text type string {
             indexing: summary | index
             index: enable-bm25
+            stemming: best
         }
         field parent_context type string {
             indexing: summary
@@ -24,6 +53,8 @@ schema sop_elements {
             indexing: summary | index
             index: enable-bm25
         }
+        
+        # === LOCATION ===
         field page_number type int {
             indexing: summary | attribute
         }
@@ -33,15 +64,12 @@ schema sop_elements {
         field crop_uri type string {
             indexing: summary | attribute
         }
-        field access_scope type string {
-            indexing: summary | attribute
-            attribute: fast-search
-        }
-        field owner_user_id type string {
-            indexing: summary | attribute
-            attribute: fast-search
-        }
+        
+        # === METADATA ===
         field created_at type long {
+            indexing: summary | attribute
+        }
+        field expires_at type long {
             indexing: summary | attribute
         }
         field embedding type tensor<float>(x[768]) {
