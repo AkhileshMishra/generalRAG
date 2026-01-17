@@ -3,6 +3,11 @@ Unstructured Runner Module
 
 Runs Unstructured partition_pdf with hi_res strategy for layout-aware extraction.
 Detects scanned vs digital pages and routes accordingly.
+
+ROUTING LOGIC:
+- Digital pages (text_density > 0.001): Use Unstructured text extraction
+- Scanned pages (text_density < 0.0001): Flag for Gemini OCR
+- Tables/Figures: Always crop and send to Gemini Vision
 """
 from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass
@@ -14,6 +19,10 @@ from unstructured.documents.elements import (
     Element, Table, Image, FigureCaption, 
     NarrativeText, Title, ListItem
 )
+
+from shared.config.settings import get_config
+
+config = get_config()
 
 class PageType(Enum):
     DIGITAL = "digital"
@@ -90,24 +99,35 @@ class UnstructuredRunner:
         return extracted, page_types
     
     def _detect_page_types(self, pdf_path: str) -> Dict[int, PageType]:
-        """Detect if each page is scanned or digital."""
+        """
+        Detect if each page is scanned or digital.
+        
+        Uses min_text_density threshold from config:
+        - Below threshold (0.0001): SCANNED → route to Gemini OCR
+        - Above 0.001: DIGITAL → use Unstructured text
+        - Between: MIXED → use both
+        """
         doc = fitz.open(pdf_path)
         page_types = {}
+        
+        min_density = config.ingestion.min_text_density
         
         for page_num, page in enumerate(doc):
             text = page.get_text()
             images = page.get_images()
             
-            text_density = len(text.strip()) / max(1, page.rect.width * page.rect.height)
+            page_area = max(1, page.rect.width * page.rect.height)
+            text_density = len(text.strip()) / page_area
             
-            if text_density < 0.0001 and images:
-                # Very little text but has images = likely scanned
+            if text_density < min_density and images:
+                # Very little text but has images = scanned
+                # Will be routed to process_scanned_page() in pipeline
                 page_types[page_num] = PageType.SCANNED
             elif text_density > 0.001:
                 # Good text density = digital
                 page_types[page_num] = PageType.DIGITAL
             else:
-                # Mixed or unclear
+                # Mixed or unclear - process both ways
                 page_types[page_num] = PageType.MIXED
         
         doc.close()

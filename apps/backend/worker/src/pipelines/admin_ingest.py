@@ -15,13 +15,17 @@ from src.ingest.gemini_vision import GeminiVision
 from src.ingest.chunking import ParentChildChunker
 from src.ingest.embeddings import EmbeddingGenerator
 from src.ingest.vespa_feed import VespaFeeder
+from src.ingest.reconciliation import ReconciliationPass
 from src.retries_qos import with_retry, IngestionError
+from shared.config.settings import get_config
+
+config = get_config()
 
 class AdminIngestionPipeline:
     """Pipeline for admin document ingestion."""
     
     def __init__(self):
-        self.splitter = PDFSplitter(batch_size=10)
+        self.splitter = PDFSplitter()
         self.extractor = UnstructuredRunner(strategy="hi_res")
         self.vision = GeminiVision()
         self.chunker = ParentChildChunker()
@@ -107,6 +111,17 @@ class AdminIngestionPipeline:
             
             stats["chunks_indexed"] = feed_stats["success"]
             stats["index_failures"] = feed_stats["failed"]
+            
+            # Run reconciliation pass if enabled
+            if config.ingestion.run_reconciliation:
+                from shared.clients.vespa_client import VespaClient
+                vespa = VespaClient(os.getenv("VESPA_ENDPOINT"))
+                reconciler = ReconciliationPass(vespa, self.vision)
+                recon_stats = await reconciler.run(
+                    doc_id, local_path, config.default_tenant_id
+                )
+                stats["reconciliation"] = recon_stats
+            
             stats["status"] = "completed"
             
             # Cleanup

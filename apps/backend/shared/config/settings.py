@@ -37,9 +37,9 @@ class IngestionConfig:
 @dataclass
 class GeminiConfig:
     """Gemini API settings."""
-    # Models
-    vision_model: str = "gemini-1.5-flash"
-    generation_model: str = "gemini-1.5-pro"
+    # Models - using Gemini 2.5 Pro for best accuracy on complex tables/diagrams
+    vision_model: str = "gemini-2.5-pro"
+    generation_model: str = "gemini-2.5-pro"
     embedding_model: str = "text-embedding-004"
     
     # Limits - NEVER upload full PDFs, only page images/crops
@@ -48,7 +48,7 @@ class GeminiConfig:
     
     # Generation
     temperature: float = 0.3
-    max_output_tokens: int = 4096
+    max_output_tokens: int = 8192
     
     # Rate limiting
     requests_per_minute: int = 60
