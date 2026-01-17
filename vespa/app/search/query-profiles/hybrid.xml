@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<query-profile id="hybrid">
+    <field name="ranking.profile">hybrid</field>
+    <field name="hits">20</field>
+    <field name="timeout">30s</field>
+</query-profile>

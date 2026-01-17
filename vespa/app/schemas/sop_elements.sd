@@ -1,0 +1,103 @@
+schema sop_elements {
+    document sop_elements {
+        field doc_id type string {
+            indexing: summary | attribute
+        }
+        field element_id type string {
+            indexing: summary | attribute
+        }
+        field element_type type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field content_text type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+        field parent_context type string {
+            indexing: summary
+        }
+        field table_html type string {
+            indexing: summary
+        }
+        field figure_caption type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+        field page_number type int {
+            indexing: summary | attribute
+        }
+        field bbox type array<float> {
+            indexing: summary | attribute
+        }
+        field crop_uri type string {
+            indexing: summary | attribute
+        }
+        field access_scope type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field owner_user_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field created_at type long {
+            indexing: summary | attribute
+        }
+        field embedding type tensor<float>(x[768]) {
+            indexing: summary | attribute | index
+            attribute {
+                distance-metric: angular
+            }
+            index {
+                hnsw {
+                    max-links-per-node: 16
+                    neighbors-to-explore-at-insert: 200
+                }
+            }
+        }
+        field colbert_tokens type tensor<float>(token{}, x[128]) {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: content_text, figure_caption
+    }
+
+    rank-profile hybrid inherits default {
+        inputs {
+            query(query_embedding) tensor<float>(x[768])
+        }
+        first-phase {
+            expression: bm25(content_text) + bm25(figure_caption) + closeness(field, embedding)
+        }
+        match-features: bm25(content_text) bm25(figure_caption) closeness(field, embedding)
+    }
+
+    rank-profile colbert_rerank inherits hybrid {
+        inputs {
+            query(query_embedding) tensor<float>(x[768])
+            query(query_tokens) tensor<float>(token{}, x[128])
+        }
+        function colbert_maxsim() {
+            expression: sum(reduce(sum(query(query_tokens) * attribute(colbert_tokens), x), max, token), token)
+        }
+        second-phase {
+            expression: colbert_maxsim()
+            rerank-count: 100
+        }
+        match-features: bm25(content_text) closeness(field, embedding) colbert_maxsim
+    }
+
+    rank-profile rag inherits colbert_rerank {
+        inputs {
+            query(query_embedding) tensor<float>(x[768])
+            query(query_tokens) tensor<float>(token{}, x[128])
+        }
+        second-phase {
+            expression: colbert_maxsim() * 0.6 + closeness(field, embedding) * 0.3 + bm25(content_text) * 0.1
+            rerank-count: 50
+        }
+    }
+}

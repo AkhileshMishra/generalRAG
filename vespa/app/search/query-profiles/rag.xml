@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<query-profile id="rag">
+    <field name="ranking.profile">rag</field>
+    <field name="hits">10</field>
+    <field name="timeout">60s</field>
+    <field name="ranking.rerankCount">50</field>
+</query-profile>
