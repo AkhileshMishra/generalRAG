@@ -105,15 +105,24 @@ jobs:
 
       - name: Deploy Vespa Application
         run: |
-          # Get Vespa endpoint from Terraform output or secret
-          VESPA_IP=$(gcloud compute instances describe generalrag-vespa-prod \
-            --zone=${{ env.REGION }}-a \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --format='get(networkInterfaces[0].networkIP)')
-          
-          # Deploy Vespa application package
+          # 1. Create the application zip locally
           cd vespa/app
           zip -r application.zip .
-          curl -X POST "http://${VESPA_IP}:19071/application/v2/tenant/default/prepareandactivate" \
-            -H "Content-Type: application/zip" \
-            --data-binary @application.zip
+          cd ../..
+
+          # 2. Wait for Vespa Config Server to be ready
+          echo "Waiting for Vespa Config Server to be ready..."
+          timeout 300 bash -c 'until gcloud compute ssh generalrag-vespa-prod --zone=${{ env.REGION }}-a --command="curl -s http://localhost:19071/state/v1/health" --project=${{ secrets.GCP_PROJECT_ID }} --tunnel-through-iap > /dev/null 2>&1; do sleep 5; echo "Retrying..."; done'
+
+          # 3. Copy zip to the VM via IAP tunnel
+          gcloud compute scp vespa/app/application.zip generalrag-vespa-prod:~/application.zip \
+            --zone=${{ env.REGION }}-a \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --tunnel-through-iap
+
+          # 4. Deploy from within the VM (localhost access)
+          gcloud compute ssh generalrag-vespa-prod \
+            --zone=${{ env.REGION }}-a \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --tunnel-through-iap \
+            --command="curl -X POST -H 'Content-Type: application/zip' --data-binary @application.zip http://localhost:19071/application/v2/tenant/default/prepareandactivate"

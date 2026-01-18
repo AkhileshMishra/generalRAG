@@ -37,9 +37,9 @@ class IngestionConfig:
 @dataclass
 class GeminiConfig:
     """Gemini API settings."""
-    # Models - using Gemini 2.5 Pro for best accuracy on complex tables/diagrams
-    vision_model: str = "gemini-2.5-pro"
-    generation_model: str = "gemini-2.5-pro"
+    # Models - using Gemini 1.5 Pro (2.5 not yet available)
+    vision_model: str = "gemini-1.5-pro"
+    generation_model: str = "gemini-1.5-pro"
     embedding_model: str = "text-embedding-004"
     
     # Limits - NEVER upload full PDFs, only page images/crops
