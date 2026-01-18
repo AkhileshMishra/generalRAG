@@ -10,6 +10,14 @@ from src.auth.jwt_middleware import get_current_user
 
 router = APIRouter()
 
+ALLOWED_EXTENSIONS = {'.pdf', '.csv', '.xlsx', '.xls'}
+CONTENT_TYPES = {
+    '.pdf': 'application/pdf',
+    '.csv': 'text/csv',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.xls': 'application/vnd.ms-excel'
+}
+
 class UserUploadResponse(BaseModel):
     doc_id: str
     filename: str
@@ -21,6 +29,9 @@ USER_UPLOADS_BUCKET = os.getenv("USER_UPLOADS_BUCKET")
 WORKER_URL = os.getenv("WORKER_URL")
 UPLOAD_EXPIRY_DAYS = 30
 
+def get_file_extension(filename: str) -> str:
+    return os.path.splitext(filename.lower())[1]
+
 @router.post("/", response_model=UserUploadResponse)
 async def user_upload(
     background_tasks: BackgroundTasks,
@@ -30,10 +41,14 @@ async def user_upload(
 ):
     """
     User upload endpoint for private session documents.
-    Documents expire after 30 days.
+    Supports PDF, CSV, and Excel files. Documents expire after 30 days.
     """
-    if not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    ext = get_file_extension(file.filename)
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported file type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
     
     # Check file size (limit to 100MB for user uploads)
     content = await file.read()
@@ -50,7 +65,7 @@ async def user_upload(
     # Upload to GCS (bucket has 30-day lifecycle policy)
     bucket = storage_client.bucket(USER_UPLOADS_BUCKET)
     blob = bucket.blob(gcs_path)
-    blob.upload_from_string(content, content_type="application/pdf")
+    blob.upload_from_string(content, content_type=CONTENT_TYPES.get(ext, 'application/octet-stream'))
     
     metadata = {
         "doc_id": doc_id,

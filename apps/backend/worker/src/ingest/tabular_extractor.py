@@ -43,9 +43,17 @@ class TabularExtractor:
             raise ValueError(f"Unsupported file type: {ext}")
     
     def _extract_csv(self, file_path: str, doc_id: str) -> List[TabularChunk]:
-        """Extract from CSV file."""
-        df = pd.read_csv(file_path)
-        return self._chunk_dataframe(df, doc_id, "sheet1")
+        """Extract from CSV file using chunked reading to avoid OOM on large files."""
+        chunks = []
+        row_offset = 0
+        
+        # Stream CSV in batches to handle 500MB+ files without OOM
+        for batch_df in pd.read_csv(file_path, chunksize=1000):
+            batch_chunks = self._chunk_dataframe(batch_df, doc_id, "sheet1", row_offset)
+            chunks.extend(batch_chunks)
+            row_offset += len(batch_df)
+        
+        return chunks
     
     def _extract_excel(self, file_path: str, doc_id: str) -> List[TabularChunk]:
         """Extract from Excel file (all sheets)."""
@@ -54,7 +62,7 @@ class TabularExtractor:
         
         for sheet_name in xlsx.sheet_names:
             df = pd.read_excel(xlsx, sheet_name=sheet_name)
-            chunks.extend(self._chunk_dataframe(df, doc_id, sheet_name))
+            chunks.extend(self._chunk_dataframe(df, doc_id, sheet_name, 0))
         
         return chunks
     
@@ -62,7 +70,8 @@ class TabularExtractor:
         self, 
         df: pd.DataFrame, 
         doc_id: str, 
-        sheet_name: str
+        sheet_name: str,
+        row_offset: int = 0
     ) -> List[TabularChunk]:
         """Chunk dataframe into row groups with column headers as context."""
         chunks = []
@@ -80,19 +89,19 @@ class TabularExtractor:
             
             content = f"Columns: {header_text}\n\n" + "\n".join(rows_text)
             
+            absolute_row = row_offset + i
             chunk_id = hashlib.sha256(
-                f"{doc_id}_{sheet_name}_{i}".encode()
+                f"{doc_id}_{sheet_name}_{absolute_row}".encode()
             ).hexdigest()[:12]
             
             chunks.append(TabularChunk(
                 chunk_id=f"{doc_id}_{chunk_id}",
                 content_text=content,
                 sheet_name=sheet_name,
-                row_start=i,
-                row_end=min(i + self.rows_per_chunk, len(df)),
+                row_start=absolute_row,
+                row_end=absolute_row + len(batch),
                 columns=columns,
                 metadata={
-                    "total_rows": len(df),
                     "file_type": "tabular"
                 }
             ))

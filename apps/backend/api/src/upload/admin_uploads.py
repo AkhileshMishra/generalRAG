@@ -9,6 +9,14 @@ from src.auth.jwt_middleware import require_admin
 
 router = APIRouter()
 
+ALLOWED_EXTENSIONS = {'.pdf', '.csv', '.xlsx', '.xls'}
+CONTENT_TYPES = {
+    '.pdf': 'application/pdf',
+    '.csv': 'text/csv',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.xls': 'application/vnd.ms-excel'
+}
+
 class UploadResponse(BaseModel):
     doc_id: str
     filename: str
@@ -24,6 +32,9 @@ storage_client = storage.Client()
 RAW_PDFS_BUCKET = os.getenv("RAW_PDFS_BUCKET")
 WORKER_URL = os.getenv("WORKER_URL")
 
+def get_file_extension(filename: str) -> str:
+    return os.path.splitext(filename.lower())[1]
+
 @router.post("/", response_model=UploadResponse)
 async def admin_upload(
     background_tasks: BackgroundTasks,
@@ -35,10 +46,14 @@ async def admin_upload(
 ):
     """
     Admin upload endpoint for global knowledge base documents.
-    Triggers async ingestion pipeline.
+    Supports PDF, CSV, and Excel files. Triggers async ingestion pipeline.
     """
-    if not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    ext = get_file_extension(file.filename)
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported file type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
     
     doc_id = str(uuid.uuid4())
     gcs_path = f"admin/{doc_id}/{file.filename}"
@@ -48,7 +63,7 @@ async def admin_upload(
     blob = bucket.blob(gcs_path)
     
     content = await file.read()
-    blob.upload_from_string(content, content_type="application/pdf")
+    blob.upload_from_string(content, content_type=CONTENT_TYPES.get(ext, 'application/octet-stream'))
     
     # Store metadata
     metadata = {
