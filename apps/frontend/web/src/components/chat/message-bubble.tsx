@@ -1,3 +1,4 @@
+import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Message } from '@/lib/types'
@@ -8,15 +9,40 @@ interface MessageBubbleProps {
   onCitationClick: (index: number) => void
 }
 
+// Render text with clickable citation badges
+function TextWithCitations({ 
+  text, 
+  onCitationClick 
+}: { 
+  text: string
+  onCitationClick: (index: number) => void 
+}) {
+  const parts = text.split(/(\[\d+\])/g)
+  
+  return (
+    <>
+      {parts.map((part, i) => {
+        const match = part.match(/^\[(\d+)\]$/)
+        if (match) {
+          const index = parseInt(match[1]) - 1
+          return (
+            <button
+              key={i}
+              className="inline-flex items-center justify-center w-5 h-5 mx-0.5 text-xs font-medium text-blue-600 bg-blue-100 rounded hover:bg-blue-200"
+              onClick={() => onCitationClick(index)}
+            >
+              {match[1]}
+            </button>
+          )
+        }
+        return <React.Fragment key={i}>{part}</React.Fragment>
+      })}
+    </>
+  )
+}
+
 export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) {
   const isUser = message.role === 'user'
-  
-  const processContent = (content: string) => {
-    return content.replace(/\[(\d+)\]/g, (match, num) => {
-      const index = parseInt(num) - 1
-      return `<button class="citation-badge" data-citation="${index}">[${num}]</button>`
-    })
-  }
 
   return (
     <div className={cn(
@@ -32,20 +58,50 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
-            p: ({ children }) => (
-              <div 
-                dangerouslySetInnerHTML={{ 
-                  __html: processContent(String(children)) 
-                }}
-                onClick={(e) => {
-                  const target = e.target as HTMLElement
-                  if (target.classList.contains('citation-badge')) {
-                    const index = parseInt(target.dataset.citation || '0')
-                    onCitationClick(index)
+            // Process text nodes to inject citation buttons
+            p: ({ children }) => {
+              return (
+                <p className="mb-2 last:mb-0">
+                  {React.Children.map(children, (child) => {
+                    if (typeof child === 'string') {
+                      return <TextWithCitations text={child} onCitationClick={onCitationClick} />
+                    }
+                    return child
+                  })}
+                </p>
+              )
+            },
+            // Handle inline code, strong, em etc. that may contain citations
+            strong: ({ children }) => (
+              <strong>
+                {React.Children.map(children, (child) => {
+                  if (typeof child === 'string') {
+                    return <TextWithCitations text={child} onCitationClick={onCitationClick} />
                   }
-                }}
-              />
-            )
+                  return child
+                })}
+              </strong>
+            ),
+            em: ({ children }) => (
+              <em>
+                {React.Children.map(children, (child) => {
+                  if (typeof child === 'string') {
+                    return <TextWithCitations text={child} onCitationClick={onCitationClick} />
+                  }
+                  return child
+                })}
+              </em>
+            ),
+            li: ({ children }) => (
+              <li>
+                {React.Children.map(children, (child) => {
+                  if (typeof child === 'string') {
+                    return <TextWithCitations text={child} onCitationClick={onCitationClick} />
+                  }
+                  return child
+                })}
+              </li>
+            ),
           }}
         >
           {message.content}

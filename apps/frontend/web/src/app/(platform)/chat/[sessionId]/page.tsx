@@ -40,29 +40,56 @@ export default function ChatSessionPage({
 
       let assistantContent = ''
       const assistantId = (Date.now() + 1).toString()
+      let buffer = '' // Buffer for incomplete chunks
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const text = new TextDecoder().decode(value)
-        for (const line of text.split('\n')) {
-          if (line.startsWith('event: token')) continue
-          if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6))
-            if (data.text) {
-              assistantContent += data.text
-              setMessages(prev => {
-                const updated = prev.filter(m => m.id !== assistantId)
-                return [...updated, { id: assistantId, role: 'assistant', content: assistantContent }]
-              })
+        // Decode with stream: true to handle multi-byte chars across chunks
+        const chunk = new TextDecoder().decode(value, { stream: true })
+        buffer += chunk
+
+        // Split by newline, keep last incomplete line in buffer
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed || trimmed.startsWith('event:')) continue
+
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(trimmed.slice(6))
+              if (data.text) {
+                assistantContent += data.text
+                setMessages(prev => {
+                  const lastMsg = prev[prev.length - 1]
+                  if (lastMsg?.id === assistantId) {
+                    return [...prev.slice(0, -1), { ...lastMsg, content: assistantContent }]
+                  }
+                  return [...prev, { id: assistantId, role: 'assistant', content: assistantContent }]
+                })
+              }
+              if (data.citations) setCitations(data.citations)
+            } catch {
+              // Incomplete JSON - will be completed in next chunk via buffer
             }
-            if (data.citations) setCitations(data.citations)
           }
         }
       }
+
+      // Process any remaining buffer content
+      if (buffer.trim().startsWith('data: ')) {
+        try {
+          const data = JSON.parse(buffer.trim().slice(6))
+          if (data.citations) setCitations(data.citations)
+        } catch {
+          // Ignore incomplete final chunk
+        }
+      }
     } catch (err) {
-      console.error(err)
+      console.error('Stream error:', err)
     } finally {
       setIsLoading(false)
     }
