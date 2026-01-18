@@ -1,13 +1,30 @@
-variable "project_id" { type = string }
-variable "region" { type = string }
-variable "zone" { type = string }
-variable "environment" { type = string }
-variable "subnet_id" { type = string }
-variable "vespa_service_account" { type = string }
+variable "project_id" {
+  type = string
+}
+
+variable "region" {
+  type = string
+}
+
+variable "zone" {
+  type = string
+}
+
+variable "environment" {
+  type = string
+}
+
+variable "subnet_id" {
+  type = string
+}
+
+variable "vespa_service_account" {
+  type = string
+}
 
 resource "google_compute_instance" "vespa" {
   name         = "generalrag-vespa-${var.environment}"
-  machine_type = var.environment == "prod" ? "e2-standard-8" : "e2-standard-4"
+  machine_type = "e2-standard-2"  # 2 vCPU - fits free trial 8 vCPU limit
   zone         = var.zone
   project      = var.project_id
 
@@ -16,8 +33,8 @@ resource "google_compute_instance" "vespa" {
   boot_disk {
     initialize_params {
       image = "projects/cos-cloud/global/images/family/cos-stable"
-      size  = var.environment == "prod" ? 500 : 100
-      type  = "pd-ssd"
+      size  = 30  # Free tier: 30GB standard disk
+      type  = "pd-standard"  # Use standard disk for free tier
     }
   }
 
@@ -59,4 +76,6 @@ resource "google_compute_instance" "vespa" {
   }
 }
 
-output "vespa_internal_ip" { value = google_compute_instance.vespa.network_interface[0].network_ip }
+output "vespa_internal_ip" {
+  value = google_compute_instance.vespa.network_interface[0].network_ip
+}

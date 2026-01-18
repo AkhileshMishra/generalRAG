@@ -14,10 +14,10 @@ class IngestionConfig:
     batch_size: int = 10
     max_batch_size: int = 20
     min_batch_size: int = 2
-    split_concurrency: int = 3
+    split_concurrency: int = 1  # Reduced for free trial (prevents OOM on 4GB containers)
     
-    # Unstructured
-    unstructured_strategy: str = "hi_res"
+    # Unstructured - use 'fast' for free trial (hi_res requires heavy CPU/GPU)
+    unstructured_strategy: str = "fast"
     unstructured_languages: list = field(default_factory=lambda: ["eng"])
     extract_images: bool = True
     infer_table_structure: bool = True

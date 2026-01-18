@@ -36,8 +36,8 @@ resource "google_cloud_run_v2_service" "api" {
 
       resources {
         limits = {
-          cpu    = "2"
-          memory = "4Gi"
+          cpu    = "1"
+          memory = "2Gi"
         }
       }
 
@@ -93,8 +93,8 @@ resource "google_cloud_run_v2_service" "api" {
     }
 
     scaling {
-      min_instance_count = var.environment == "prod" ? 1 : 0
-      max_instance_count = 10
+      min_instance_count = 0
+      max_instance_count = 2
     }
 
     vpc_access {
@@ -124,8 +124,8 @@ resource "google_cloud_run_v2_service" "worker" {
 
       resources {
         limits = {
-          cpu    = "4"
-          memory = "8Gi"
+          cpu    = "2"
+          memory = "4Gi"
         }
       }
 
@@ -172,7 +172,7 @@ resource "google_cloud_run_v2_service" "worker" {
 
     scaling {
       min_instance_count = 0
-      max_instance_count = 5
+      max_instance_count = 2
     }
 
     vpc_access {
