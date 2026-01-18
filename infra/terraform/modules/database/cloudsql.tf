@@ -1,8 +1,23 @@
-variable "project_id" { type = string }
-variable "region" { type = string }
-variable "environment" { type = string }
-variable "network_id" { type = string }
-variable "db_password" { type = string sensitive = true }
+variable "project_id" {
+  type = string
+}
+
+variable "region" {
+  type = string
+}
+
+variable "environment" {
+  type = string
+}
+
+variable "network_id" {
+  type = string
+}
+
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
 
 resource "google_sql_database_instance" "main" {
   name             = "generalrag-${var.environment}"
@@ -43,5 +58,10 @@ resource "google_sql_user" "app" {
   project  = var.project_id
 }
 
-output "instance_connection_name" { value = google_sql_database_instance.main.connection_name }
-output "private_ip" { value = google_sql_database_instance.main.private_ip_address }
+output "instance_connection_name" {
+  value = google_sql_database_instance.main.connection_name
+}
+
+output "private_ip" {
+  value = google_sql_database_instance.main.private_ip_address
+}
