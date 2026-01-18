@@ -4,11 +4,16 @@ Vespa Feed Module
 Feeds processed documents to Vespa for indexing.
 """
 import os
+import time
 from typing import List, Dict, Any
 import httpx
 from dataclasses import asdict
 
 from src.ingest.chunking import Chunk
+from shared.config.settings import get_config
+
+config = get_config()
+
 
 class VespaFeeder:
     """Feeds documents to Vespa."""
@@ -22,6 +27,8 @@ class VespaFeeder:
         chunks: List[Chunk],
         access_scope: str,
         owner_user_id: str = None,
+        tenant_id: str = None,
+        workspace_id: str = None,
         batch_size: int = 50
     ) -> Dict[str, int]:
         """
@@ -31,11 +38,15 @@ class VespaFeeder:
             chunks: List of Chunk objects
             access_scope: 'global' or 'private'
             owner_user_id: User ID for private docs
+            tenant_id: Tenant ID (defaults to config)
+            workspace_id: Workspace ID (defaults to config)
             batch_size: Number of docs per batch
             
         Returns:
             Stats dict with success/failure counts
         """
+        tenant_id = tenant_id or config.default_tenant_id
+        workspace_id = workspace_id or config.default_workspace_id
         stats = {"success": 0, "failed": 0}
         
         async with httpx.AsyncClient(timeout=30) as client:
@@ -43,7 +54,9 @@ class VespaFeeder:
                 batch = chunks[i:i + batch_size]
                 
                 for chunk in batch:
-                    doc = self._chunk_to_vespa_doc(chunk, access_scope, owner_user_id)
+                    doc = self._chunk_to_vespa_doc(
+                        chunk, access_scope, owner_user_id, tenant_id, workspace_id
+                    )
                     
                     try:
                         response = await client.post(
@@ -55,7 +68,47 @@ class VespaFeeder:
                             stats["success"] += 1
                         else:
                             stats["failed"] += 1
-                    except Exception as e:
+                    except Exception:
+                        stats["failed"] += 1
+        
+        return stats
+    
+    async def feed_docs(
+        self,
+        docs: List[Dict[str, Any]],
+        batch_size: int = 50
+    ) -> Dict[str, int]:
+        """
+        Feed pre-formatted documents to Vespa (used by TabularExtractor).
+        
+        Args:
+            docs: List of dicts with Vespa field format
+            batch_size: Number of docs per batch
+            
+        Returns:
+            Stats dict with success/failure counts
+        """
+        stats = {"success": 0, "failed": 0}
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            for i in range(0, len(docs), batch_size):
+                batch = docs[i:i + batch_size]
+                
+                for doc in batch:
+                    element_id = doc.get("element_id", doc.get("chunk_id", "unknown"))
+                    vespa_doc = {"fields": doc}
+                    
+                    try:
+                        response = await client.post(
+                            f"{self.document_api}/sop_elements/docid/{element_id}",
+                            json=vespa_doc
+                        )
+                        
+                        if response.status_code in (200, 201):
+                            stats["success"] += 1
+                        else:
+                            stats["failed"] += 1
+                    except Exception:
                         stats["failed"] += 1
         
         return stats
@@ -64,7 +117,9 @@ class VespaFeeder:
         self,
         chunk: Chunk,
         access_scope: str,
-        owner_user_id: str = None
+        owner_user_id: str = None,
+        tenant_id: str = None,
+        workspace_id: str = None
     ) -> Dict[str, Any]:
         """Convert Chunk to Vespa document format."""
         doc = {
@@ -78,7 +133,9 @@ class VespaFeeder:
                 "bbox": chunk.bbox,
                 "access_scope": access_scope,
                 "owner_user_id": owner_user_id or "",
-                "created_at": int(os.time() * 1000) if hasattr(os, 'time') else 0
+                "tenant_id": tenant_id or config.default_tenant_id,
+                "workspace_id": workspace_id or config.default_workspace_id,
+                "created_at": int(time.time() * 1000)
             }
         }
         
@@ -98,7 +155,6 @@ class VespaFeeder:
     
     def _format_colbert(self, tokens: Any) -> Dict:
         """Format ColBERT tokens for Vespa tensor format."""
-        # Convert to Vespa mapped tensor format
         cells = []
         for i, token_vec in enumerate(tokens):
             for j, val in enumerate(token_vec):
@@ -118,7 +174,6 @@ class VespaFeeder:
     
     async def delete_by_owner(self, owner_user_id: str) -> int:
         """Delete all documents owned by a user."""
-        # Use Vespa's visit API with selection
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.delete(
                 f"{self.document_api}/sop_elements/docid/",
