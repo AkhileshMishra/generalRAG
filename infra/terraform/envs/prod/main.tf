@@ -17,10 +17,25 @@ terraform {
 provider "google" {
   project = var.project_id
   region  = var.region
+
+  default_labels = {
+    managed_by  = "github_actions"
+    environment = "production"
+    cost_center = "ai-infrastructure"
+    project     = "generalrag"
+  }
 }
 
 locals {
   environment = "prod"
+}
+
+# Workload Identity Federation for GitHub Actions
+module "wif" {
+  source      = "../../modules/wif"
+  project_id  = var.project_id
+  github_repo = var.github_repo
+  environment = local.environment
 }
 
 module "network" {

@@ -14,3 +14,9 @@ variable "db_password" {
   sensitive   = true
   description = "Database password"
 }
+
+variable "github_repo" {
+  type        = string
+  description = "GitHub repository in format 'owner/repo'"
+  default     = "AkhileshMishra/generalRAG"
+}

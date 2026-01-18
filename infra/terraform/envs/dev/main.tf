@@ -17,6 +17,13 @@ terraform {
 provider "google" {
   project = var.project_id
   region  = var.region
+
+  default_labels = {
+    managed_by  = "github_actions"
+    environment = "development"
+    cost_center = "ai-infrastructure"
+    project     = "generalrag"
+  }
 }
 
 locals {
