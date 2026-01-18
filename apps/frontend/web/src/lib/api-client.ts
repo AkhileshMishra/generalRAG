@@ -17,13 +17,18 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const token = this.getAuthToken()
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
     }
 
     if (token) {
-      headers.Authorization = `Bearer ${token}`
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    // Merge any additional headers
+    if (options.headers) {
+      const optHeaders = options.headers as Record<string, string>
+      Object.assign(headers, optHeaders)
     }
 
     const response = await fetch(`${this.baseURL}${endpoint}`, {
@@ -56,12 +61,12 @@ class ApiClient {
     onError?: (error: Error) => void
   ): Promise<void> {
     const token = this.getAuthToken()
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
 
     if (token) {
-      headers.Authorization = `Bearer ${token}`
+      headers['Authorization'] = `Bearer ${token}`
     }
 
     try {

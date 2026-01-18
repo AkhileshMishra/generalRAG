@@ -1,6 +1,6 @@
 'use client';
 
-import { useUIStore } from '@/stores/ui-store';
+import { useUIStore } from '@/stores/use-ui-store';
 import { useAuth } from '@/hooks/use-auth';
 
 export function Sidebar() {

@@ -1,17 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useChat } from 'ai/react'
+import { useEffect, useState, useCallback } from 'react'
 import { MessageList } from '@/components/chat/message-list'
 import { ChatInput } from '@/components/chat/chat-input'
 import { CitationPanel } from '@/components/chat/citation-panel'
-
-interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  citations?: any[]
-}
+import { Message, Citation } from '@/lib/types'
 
 export default function ChatSessionPage({
   params,
@@ -19,63 +12,86 @@ export default function ChatSessionPage({
   params: { sessionId: string }
 }) {
   const [messages, setMessages] = useState<Message[]>([])
-  const [selectedCitation, setSelectedCitation] = useState(null)
-  const [showCitationPanel, setShowCitationPanel] = useState(false)
-
-  const { messages: chatMessages, input, handleInputChange, handleSubmit, isLoading } = useChat({
-    api: '/api/chat',
-    body: { sessionId: params.sessionId },
-    onFinish: (message) => {
-      setMessages(prev => [...prev, message])
-    }
-  })
+  const [citations, setCitations] = useState<Citation[]>([])
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    const fetchMessages = async () => {
-      try {
-        const response = await fetch(`/api/sessions/${params.sessionId}/messages`)
-        if (response.ok) {
-          const data = await response.json()
-          setMessages(data.messages || [])
-        }
-      } catch (error) {
-        console.error('Error fetching messages:', error)
-      }
-    }
-
-    fetchMessages()
+    fetch(`/api/sessions/${params.sessionId}/messages`)
+      .then(res => res.ok ? res.json() : { messages: [] })
+      .then(data => setMessages(data.messages || []))
+      .catch(() => {})
   }, [params.sessionId])
 
-  const handleCitationClick = (citation: any) => {
-    setSelectedCitation(citation)
-    setShowCitationPanel(true)
-  }
+  const handleSend = useCallback(async (content: string) => {
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content }
+    setMessages(prev => [...prev, userMsg])
+    setIsLoading(true)
 
-  const allMessages = [...messages, ...chatMessages]
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: content, sessionId: params.sessionId })
+      })
+
+      const reader = res.body?.getReader()
+      if (!reader) return
+
+      let assistantContent = ''
+      const assistantId = (Date.now() + 1).toString()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const text = new TextDecoder().decode(value)
+        for (const line of text.split('\n')) {
+          if (line.startsWith('event: token')) continue
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6))
+            if (data.text) {
+              assistantContent += data.text
+              setMessages(prev => {
+                const updated = prev.filter(m => m.id !== assistantId)
+                return [...updated, { id: assistantId, role: 'assistant', content: assistantContent }]
+              })
+            }
+            if (data.citations) setCitations(data.citations)
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [params.sessionId])
+
+  const handleCitationClick = (index: number) => {
+    setSelectedIndex(index)
+  }
 
   return (
     <div className="flex h-full">
       <div className="flex-1 flex flex-col">
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto p-4">
           <MessageList 
-            messages={allMessages}
+            messages={messages}
+            isLoading={isLoading}
             onCitationClick={handleCitationClick}
           />
         </div>
         <div className="border-t p-4">
-          <ChatInput
-            input={input}
-            handleInputChange={handleInputChange}
-            handleSubmit={handleSubmit}
-            isLoading={isLoading}
-          />
+          <ChatInput onSend={handleSend} disabled={isLoading} />
         </div>
       </div>
       
-      {showCitationPanel && (
+      {selectedIndex !== null && (
         <CitationPanel
-          citation={selectedCitation}
-          onClose={() => setShowCitationPanel(false)}
+          citations={citations}
+          selectedIndex={selectedIndex}
+          onClose={() => setSelectedIndex(null)}
         />
       )}
     </div>

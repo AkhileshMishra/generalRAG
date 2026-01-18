@@ -65,7 +65,10 @@ class ReconciliationPass:
                 # Feed to Vespa
                 await self._index_element(doc_id, elem, result, tenant_id)
                 processed += 1
-            except Exception:
+            except Exception as e:
+                # Log and continue - don't fail entire reconciliation for one element
+                import logging
+                logging.warning(f"Reconciliation failed for element on page {elem.page_number}: {e}")
                 continue
         
         return {"missed": len(missed), "processed": processed}

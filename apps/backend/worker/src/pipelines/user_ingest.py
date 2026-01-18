@@ -156,16 +156,18 @@ class UserIngestionPipeline:
                 crop = self.vision.crop_region(pdf_path, elem.page_number - 1, elem.bbox)
                 vr = await self.vision.process_table(crop, elem.element_id)
                 result["metadata"]["html"] = vr.content
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.warning(f"Table processing failed for {elem.element_id}: {e}")
         
         elif elem.element_type == "figure" and elem.bbox != [0, 0, 0, 0]:
             try:
                 crop = self.vision.crop_region(pdf_path, elem.page_number - 1, elem.bbox)
                 vr = await self.vision.process_figure(crop, elem.element_id)
                 result["metadata"]["figure_caption"] = vr.content
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.warning(f"Figure processing failed for {elem.element_id}: {e}")
         
         return result
     

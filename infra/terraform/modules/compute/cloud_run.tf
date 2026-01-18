@@ -1,9 +1,26 @@
-variable "project_id" { type = string }
-variable "region" { type = string }
-variable "environment" { type = string }
-variable "vpc_connector_id" { type = string }
-variable "api_service_account" { type = string }
-variable "worker_service_account" { type = string }
+variable "project_id" {
+  type = string
+}
+
+variable "region" {
+  type = string
+}
+
+variable "environment" {
+  type = string
+}
+
+variable "vpc_connector_id" {
+  type = string
+}
+
+variable "api_service_account" {
+  type = string
+}
+
+variable "worker_service_account" {
+  type = string
+}
 
 resource "google_cloud_run_v2_service" "api" {
   name     = "generalrag-api-${var.environment}"
@@ -12,7 +29,7 @@ resource "google_cloud_run_v2_service" "api" {
 
   template {
     service_account = var.api_service_account
-    timeout         = "3600s" # 60 minutes
+    timeout         = "3600s"
 
     containers {
       image = "${var.region}-docker.pkg.dev/${var.project_id}/generalrag/api:latest"
@@ -24,24 +41,54 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
-      env { name = "ENVIRONMENT" value = var.environment }
-      env { name = "PROJECT_ID" value = var.project_id }
-      
+      env {
+        name  = "ENVIRONMENT"
+        value = var.environment
+      }
+
+      env {
+        name  = "PROJECT_ID"
+        value = var.project_id
+      }
+
       env {
         name = "GEMINI_API_KEY"
-        value_source { secret_key_ref { secret = "gemini-api-key" version = "latest" } }
+        value_source {
+          secret_key_ref {
+            secret  = "gemini-api-key"
+            version = "latest"
+          }
+        }
       }
+
       env {
         name = "VESPA_ENDPOINT"
-        value_source { secret_key_ref { secret = "vespa-endpoint" version = "latest" } }
+        value_source {
+          secret_key_ref {
+            secret  = "vespa-endpoint"
+            version = "latest"
+          }
+        }
       }
+
       env {
         name = "DB_CONNECTION_STRING"
-        value_source { secret_key_ref { secret = "db-connection-string" version = "latest" } }
+        value_source {
+          secret_key_ref {
+            secret  = "db-connection-string"
+            version = "latest"
+          }
+        }
       }
+
       env {
         name = "JWT_SECRET"
-        value_source { secret_key_ref { secret = "jwt-secret" version = "latest" } }
+        value_source {
+          secret_key_ref {
+            secret  = "jwt-secret"
+            version = "latest"
+          }
+        }
       }
     }
 
@@ -56,7 +103,10 @@ resource "google_cloud_run_v2_service" "api" {
     }
   }
 
-  traffic { type = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST" percent = 100 }
+  traffic {
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
+  }
 }
 
 resource "google_cloud_run_v2_service" "worker" {
@@ -78,20 +128,44 @@ resource "google_cloud_run_v2_service" "worker" {
         }
       }
 
-      env { name = "ENVIRONMENT" value = var.environment }
-      env { name = "PROJECT_ID" value = var.project_id }
-      
+      env {
+        name  = "ENVIRONMENT"
+        value = var.environment
+      }
+
+      env {
+        name  = "PROJECT_ID"
+        value = var.project_id
+      }
+
       env {
         name = "GEMINI_API_KEY"
-        value_source { secret_key_ref { secret = "gemini-api-key" version = "latest" } }
+        value_source {
+          secret_key_ref {
+            secret  = "gemini-api-key"
+            version = "latest"
+          }
+        }
       }
+
       env {
         name = "VESPA_ENDPOINT"
-        value_source { secret_key_ref { secret = "vespa-endpoint" version = "latest" } }
+        value_source {
+          secret_key_ref {
+            secret  = "vespa-endpoint"
+            version = "latest"
+          }
+        }
       }
+
       env {
         name = "DB_CONNECTION_STRING"
-        value_source { secret_key_ref { secret = "db-connection-string" version = "latest" } }
+        value_source {
+          secret_key_ref {
+            secret  = "db-connection-string"
+            version = "latest"
+          }
+        }
       }
     }
 
@@ -116,5 +190,10 @@ resource "google_cloud_run_service_iam_member" "api_public" {
   member   = "allUsers"
 }
 
-output "api_url" { value = google_cloud_run_v2_service.api.uri }
-output "worker_url" { value = google_cloud_run_v2_service.worker.uri }
+output "api_url" {
+  value = google_cloud_run_v2_service.api.uri
+}
+
+output "worker_url" {
+  value = google_cloud_run_v2_service.worker.uri
+}

@@ -80,7 +80,7 @@ class TabularExtractor:
             
             content = f"Columns: {header_text}\n\n" + "\n".join(rows_text)
             
-            chunk_id = hashlib.md5(
+            chunk_id = hashlib.sha256(
                 f"{doc_id}_{sheet_name}_{i}".encode()
             ).hexdigest()[:12]
             
