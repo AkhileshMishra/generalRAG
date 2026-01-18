@@ -1,5 +1,10 @@
-variable "project_id" { type = string }
-variable "environment" { type = string }
+variable "project_id" {
+  type = string
+}
+
+variable "environment" {
+  type = string
+}
 
 resource "google_service_account" "api" {
   account_id   = "generalrag-api-${var.environment}"
@@ -19,6 +24,14 @@ resource "google_service_account" "vespa" {
   project      = var.project_id
 }
 
-output "api_service_account" { value = google_service_account.api.email }
-output "worker_service_account" { value = google_service_account.worker.email }
-output "vespa_service_account" { value = google_service_account.vespa.email }
+output "api_service_account" {
+  value = google_service_account.api.email
+}
+
+output "worker_service_account" {
+  value = google_service_account.worker.email
+}
+
+output "vespa_service_account" {
+  value = google_service_account.vespa.email
+}

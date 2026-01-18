@@ -9,11 +9,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# Copy shared module first (build context must be apps/backend)
+COPY shared/ ./shared/
+
+# Copy worker-specific files
+COPY worker/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src/ ./src/
-COPY ../shared/ ./shared/
+COPY worker/src/ ./src/
 
 ENV PYTHONPATH=/app
 ENV PORT=8080

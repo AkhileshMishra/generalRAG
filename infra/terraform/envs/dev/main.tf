@@ -30,6 +30,13 @@ locals {
   environment = "dev"
 }
 
+# Artifact Registry for Docker images
+module "artifact_registry" {
+  source     = "../../modules/artifact_registry"
+  project_id = var.project_id
+  region     = var.region
+}
+
 module "network" {
   source      = "../../modules/network"
   project_id  = var.project_id
@@ -44,6 +51,7 @@ module "storage" {
   environment = local.environment
 }
 
+# Service accounts only
 module "iam" {
   source      = "../../modules/iam"
   project_id  = var.project_id
@@ -73,25 +81,18 @@ module "compute" {
   vpc_connector_id       = module.network.vpc_connector_id
   api_service_account    = module.iam.api_service_account
   worker_service_account = module.iam.worker_service_account
-  depends_on             = [module.secrets]
+  depends_on             = [module.secrets, module.artifact_registry]
 }
 
-module "vespa" {
-  source                = "../../modules/compute"
-  project_id            = var.project_id
-  region                = var.region
-  zone                  = "${var.region}-a"
-  environment           = local.environment
-  subnet_id             = module.network.subnet_id
-  vespa_service_account = module.iam.vespa_service_account
-}
-
+# IAM bindings - separate call
 module "iam_bindings" {
   source                 = "../../modules/iam"
   project_id             = var.project_id
+  environment            = local.environment
   api_service_account    = module.iam.api_service_account
   worker_service_account = module.iam.worker_service_account
   raw_pdfs_bucket        = module.storage.raw_pdfs_bucket
   page_crops_bucket      = module.storage.page_crops_bucket
   user_uploads_bucket    = module.storage.user_uploads_bucket
+  depends_on             = [module.iam, module.storage]
 }
