@@ -102,3 +102,18 @@ jobs:
             --image ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/generalrag/worker:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Deploy Vespa Application
+        run: |
+          # Get Vespa endpoint from Terraform output or secret
+          VESPA_IP=$(gcloud compute instances describe generalrag-vespa-prod \
+            --zone=${{ env.REGION }}-a \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --format='get(networkInterfaces[0].networkIP)')
+          
+          # Deploy Vespa application package
+          cd vespa/app
+          zip -r application.zip .
+          curl -X POST "http://${VESPA_IP}:19071/application/v2/tenant/default/prepareandactivate" \
+            -H "Content-Type: application/zip" \
+            --data-binary @application.zip

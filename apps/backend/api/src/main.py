@@ -1,4 +1,5 @@
 import os
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,10 +9,18 @@ from src.chat.router import router as chat_router
 from src.citations.router import router as citations_router
 from src.upload.admin_uploads import router as admin_upload_router
 from src.upload.user_uploads import router as user_upload_router
+from src.db import init_db
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup - initialize database tables
+    logger.info("Initializing database...")
+    await init_db()
+    logger.info("Database initialized")
     yield
     # Shutdown
 

@@ -1,104 +1,85 @@
 """
 Embeddings Module
 
-Generates dense embeddings using CPU-friendly models.
-Supports both dense vectors and ColBERT-style token embeddings.
+Generates dense embeddings using Gemini text-embedding-004 (768 dimensions).
+Consistent with Vespa schema and API query embeddings.
 """
+import asyncio
 from typing import List, Tuple
 import numpy as np
-from sentence_transformers import SentenceTransformer
+
+from shared.clients.gemini_client import GeminiClient
+
 
 class EmbeddingGenerator:
-    """Generates embeddings for retrieval."""
+    """
+    Generates embeddings using Gemini API.
     
-    def __init__(
-        self,
-        dense_model: str = "sentence-transformers/all-MiniLM-L6-v2",
-        colbert_model: str = "colbert-ir/colbertv2.0"
-    ):
-        self.dense_model = SentenceTransformer(dense_model)
-        self.dense_dim = self.dense_model.get_sentence_embedding_dimension()
-        
-        # ColBERT model (optional, heavier)
-        self._colbert_model = None
-        self._colbert_model_name = colbert_model
+    Uses text-embedding-004 which outputs 768-dimensional vectors,
+    matching the Vespa schema tensor<float>(x[768]).
+    """
     
-    @property
-    def colbert_model(self):
-        """Lazy load ColBERT model."""
-        if self._colbert_model is None:
-            self._colbert_model = SentenceTransformer(self._colbert_model_name)
-        return self._colbert_model
+    EMBEDDING_DIM = 768  # text-embedding-004 output dimension
+    
+    def __init__(self):
+        self.client = GeminiClient()
+    
+    def embed(self, text: str) -> List[float]:
+        """Generate embedding for single text (sync wrapper)."""
+        return asyncio.run(self.client.embed_text(text))
+    
+    async def embed_async(self, text: str) -> List[float]:
+        """Generate embedding for single text."""
+        return await self.client.embed_text(text)
     
     def embed_texts(self, texts: List[str]) -> np.ndarray:
+        """Generate dense embeddings for texts (sync wrapper)."""
+        embeddings = asyncio.run(self.client.batch_embed(texts))
+        return np.array(embeddings, dtype=np.float32)
+    
+    async def embed_texts_async(self, texts: List[str]) -> np.ndarray:
         """Generate dense embeddings for texts."""
-        return self.dense_model.encode(
-            texts,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-            show_progress_bar=len(texts) > 10
-        )
-    
-    def embed_query(self, query: str) -> np.ndarray:
-        """Generate embedding for a single query."""
-        return self.dense_model.encode(
-            query,
-            convert_to_numpy=True,
-            normalize_embeddings=True
-        )
-    
-    def embed_colbert(self, text: str, max_tokens: int = 32) -> np.ndarray:
-        """
-        Generate ColBERT-style token embeddings.
-        
-        Returns tensor of shape (num_tokens, embedding_dim)
-        """
-        # Tokenize and get token embeddings
-        encoded = self.colbert_model.tokenize([text])
-        
-        with self.colbert_model._target_device:
-            features = self.colbert_model.forward(encoded)
-            token_embeddings = features['token_embeddings'][0].cpu().numpy()
-        
-        # Truncate/pad to max_tokens
-        if len(token_embeddings) > max_tokens:
-            token_embeddings = token_embeddings[:max_tokens]
-        elif len(token_embeddings) < max_tokens:
-            padding = np.zeros((max_tokens - len(token_embeddings), token_embeddings.shape[1]))
-            token_embeddings = np.vstack([token_embeddings, padding])
-        
-        # Normalize
-        norms = np.linalg.norm(token_embeddings, axis=1, keepdims=True)
-        token_embeddings = token_embeddings / np.maximum(norms, 1e-8)
-        
-        return token_embeddings
+        embeddings = await self.client.batch_embed(texts)
+        return np.array(embeddings, dtype=np.float32)
     
     def batch_embed(
         self,
         texts: List[str],
-        batch_size: int = 32,
+        batch_size: int = 100,
         include_colbert: bool = False
-    ) -> Tuple[np.ndarray, List[np.ndarray]]:
+    ) -> Tuple[np.ndarray, List]:
         """
-        Batch embed texts with optional ColBERT embeddings.
+        Batch embed texts.
         
+        Args:
+            texts: List of texts to embed
+            batch_size: Texts per API call (Gemini limit ~100)
+            include_colbert: Ignored (ColBERT not supported with Gemini)
+            
         Returns:
-            - dense_embeddings: (N, dense_dim) array
-            - colbert_embeddings: List of (tokens, colbert_dim) arrays (if include_colbert)
+            - dense_embeddings: (N, 768) array
+            - colbert_embeddings: Empty list (not supported)
         """
-        # Dense embeddings
-        dense_embeddings = []
+        all_embeddings = []
+        
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
-            embeddings = self.embed_texts(batch)
-            dense_embeddings.append(embeddings)
+            embeddings = asyncio.run(self.client.batch_embed(batch))
+            all_embeddings.extend(embeddings)
         
-        dense_embeddings = np.vstack(dense_embeddings)
+        return np.array(all_embeddings, dtype=np.float32), []
+    
+    async def batch_embed_async(
+        self,
+        texts: List[str],
+        batch_size: int = 100
+    ) -> np.ndarray:
+        """Async batch embed."""
+        all_embeddings = []
         
-        # ColBERT embeddings (optional)
-        colbert_embeddings = []
-        if include_colbert:
-            for text in texts:
-                colbert_embeddings.append(self.embed_colbert(text))
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            embeddings = await self.client.batch_embed(batch)
+            all_embeddings.extend(embeddings)
         
-        return dense_embeddings, colbert_embeddings
+        return np.array(all_embeddings, dtype=np.float32)

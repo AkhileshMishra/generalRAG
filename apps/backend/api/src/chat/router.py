@@ -11,10 +11,12 @@ from shared.clients.gemini_client import GeminiClient
 
 router = APIRouter()
 
+
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
     include_private: bool = True
+
 
 class Citation(BaseModel):
     doc_id: str
@@ -24,15 +26,18 @@ class Citation(BaseModel):
     snippet: str
     crop_uri: Optional[str] = None
 
+
 class ChatResponse(BaseModel):
     answer: str
     citations: List[Citation]
     session_id: str
 
+
 vespa_client = VespaClient(os.getenv("VESPA_ENDPOINT"))
 gemini_client = GeminiClient(os.getenv("GEMINI_API_KEY"))
 query_builder = VespaQueryBuilder()
 context_packer = ContextPacker()
+
 
 @router.post("/", response_model=ChatResponse)
 async def chat(
@@ -40,13 +45,21 @@ async def chat(
     current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     user_id = current_user["user_id"] if current_user else None
+    tenant_id = current_user.get("tenant_id") if current_user else None
+    
+    # Generate query embedding for vector search
+    query_embedding = await gemini_client.embed_text(request.message)
     
     # Build Vespa query with access control
     yql, ranking_features = query_builder.build_rag_query(
         query_text=request.message,
+        tenant_id=tenant_id,
         user_id=user_id if request.include_private else None,
         include_global=True
     )
+    
+    # Add query embedding to ranking features
+    ranking_features["input.query(query_embedding)"] = query_embedding
     
     # Execute retrieval
     results = await vespa_client.query(yql, ranking_features)
@@ -80,6 +93,7 @@ async def chat(
         session_id=request.session_id or "default"
     )
 
+
 @router.post("/stream")
 async def chat_stream(
     req: Request,
@@ -92,12 +106,18 @@ async def chat_stream(
     user_id = current_user["user_id"] if current_user else None
     tenant_id = current_user.get("tenant_id") if current_user else None
     
+    # Generate query embedding for vector search
+    query_embedding = await gemini_client.embed_text(request.message)
+    
     yql, ranking_features = query_builder.build_rag_query(
         query_text=request.message,
         tenant_id=tenant_id,
         user_id=user_id if request.include_private else None,
         include_global=True
     )
+    
+    # Add query embedding to ranking features
+    ranking_features["input.query(query_embedding)"] = query_embedding
     
     results = await vespa_client.query(yql, ranking_features)
     context, image_crops = context_packer.pack(results)
