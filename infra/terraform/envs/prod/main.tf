@@ -101,9 +101,9 @@ module "vespa" {
   depends_on            = [module.network, module.iam]
 }
 
-# IAM bindings - separate call with all dependencies resolved
+# IAM bindings - separate module with all dependencies resolved
 module "iam_bindings" {
-  source                 = "../../modules/iam"
+  source                 = "../../modules/iam_bindings"
   project_id             = var.project_id
   api_service_account    = module.iam.api_service_account
   worker_service_account = module.iam.worker_service_account

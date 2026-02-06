@@ -5,14 +5,14 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useAuthStore } from '@/store/auth'
+import { useAuthStore } from '@/stores/use-auth-store'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const { setToken } = useAuthStore()
+  const { login } = useAuthStore()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,7 +27,7 @@ export default function LoginPage() {
 
       if (response.ok) {
         const { token } = await response.json()
-        setToken(token)
+        login(token)
         router.push('/chat')
       }
     } catch (error) {
