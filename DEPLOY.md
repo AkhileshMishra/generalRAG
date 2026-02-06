@@ -1,48 +1,45 @@
-# GeneralRAG Monorepo
+# GeneralRAG Deployment Guide
 
-## Quick Verification
+## Prerequisites
 
 ```bash
-# Check structure
-find . -type f -name "*.py" | head -20
-find . -type f -name "*.tf" | head -20
-find . -type f -name "*.tsx" | head -10
+# Bootstrap Terraform state buckets (one-time)
+./infra/bootstrap.sh YOUR_PROJECT_ID
 ```
 
-## Deploy Commands
+## Infrastructure
 
-### Infrastructure
 ```bash
 cd infra/terraform/envs/dev
 terraform init
 terraform plan -var="project_id=YOUR_PROJECT" -var="db_password=YOUR_PASSWORD"
-terraform apply
+terraform apply -var="project_id=YOUR_PROJECT" -var="db_password=YOUR_PASSWORD"
 ```
 
-### Vespa
+## Vespa
+
 ```bash
 cd vespa/app
-# Deploy to Vespa Cloud or self-hosted
 vespa deploy --target http://VESPA_IP:19071
 ```
 
-### Backend
+## Backend
+
 ```bash
-# Build and push images
-cd apps/backend/api
-docker build -t gcr.io/PROJECT/generalrag-api .
+cd apps/backend
+
+# API
+docker build -f api/Dockerfile -t gcr.io/PROJECT/generalrag-api .
 docker push gcr.io/PROJECT/generalrag-api
 
-cd ../worker
-docker build -t gcr.io/PROJECT/generalrag-worker .
+# Worker
+docker build -f worker/Dockerfile -t gcr.io/PROJECT/generalrag-worker .
 docker push gcr.io/PROJECT/generalrag-worker
 ```
 
-### Frontend
-```bash
-cd apps/frontend/user_chat
-npm install && npm run build
+## Frontend
 
-cd ../admin_portal
+```bash
+cd apps/frontend/web
 npm install && npm run build
 ```

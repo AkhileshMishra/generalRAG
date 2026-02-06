@@ -47,9 +47,12 @@ A production-ready Retrieval-Augmented Generation system optimized for large (1-
 ## Quick Start
 
 ```bash
+# 0. Bootstrap Terraform state buckets (one-time)
+./infra/bootstrap.sh YOUR_PROJECT_ID
+
 # 1. Setup infrastructure
 cd infra/terraform/envs/dev
-terraform init && terraform apply
+terraform init && terraform apply -var="project_id=YOUR_PROJECT" -var="db_password=YOUR_PASSWORD"
 
 # 2. Deploy Vespa schema
 cd ../../../../vespa/app
@@ -61,7 +64,7 @@ gcloud run deploy api --source api/
 gcloud run deploy worker --source worker/
 
 # 4. Deploy frontend
-cd ../frontend/user_chat
+cd ../frontend/web
 npm install && npm run build
 gcloud run deploy user-chat --source .
 ```
@@ -77,8 +80,7 @@ repo/
 │   │   ├── worker/           # Ingestion pipeline
 │   │   └── shared/           # Common schemas and clients
 │   └── frontend/
-│       ├── user_chat/        # End-user chatbot UI
-│       └── admin_portal/     # Admin ingestion UI
+│       └── web/              # Next.js app (user chat + admin)
 └── vespa/app/                # Vespa application package
 ```
 

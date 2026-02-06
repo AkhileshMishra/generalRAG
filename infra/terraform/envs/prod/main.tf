@@ -38,7 +38,6 @@ module "wif" {
   environment = local.environment
 }
 
-# Artifact Registry for Docker images
 module "artifact_registry" {
   source     = "../../modules/artifact_registry"
   project_id = var.project_id
@@ -59,7 +58,7 @@ module "storage" {
   environment = local.environment
 }
 
-# Service accounts only - no IAM bindings yet
+# Service accounts only
 module "iam" {
   source      = "../../modules/iam"
   project_id  = var.project_id
@@ -92,11 +91,20 @@ module "compute" {
   depends_on             = [module.secrets, module.artifact_registry]
 }
 
+module "vespa" {
+  source                = "../../modules/vespa"
+  project_id            = var.project_id
+  region                = var.region
+  environment           = local.environment
+  subnet_id             = module.network.subnet_id
+  vespa_service_account = module.iam.vespa_service_account
+  depends_on            = [module.network, module.iam]
+}
+
 # IAM bindings - separate call with all dependencies resolved
 module "iam_bindings" {
   source                 = "../../modules/iam"
   project_id             = var.project_id
-  environment            = local.environment
   api_service_account    = module.iam.api_service_account
   worker_service_account = module.iam.worker_service_account
   raw_pdfs_bucket        = module.storage.raw_pdfs_bucket

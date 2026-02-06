@@ -6,10 +6,6 @@ variable "region" {
   type = string
 }
 
-variable "zone" {
-  type = string
-}
-
 variable "environment" {
   type = string
 }
@@ -24,8 +20,8 @@ variable "vespa_service_account" {
 
 resource "google_compute_instance" "vespa" {
   name         = "generalrag-vespa-${var.environment}"
-  machine_type = "e2-standard-2"  # 2 vCPU - fits free trial 8 vCPU limit
-  zone         = var.zone
+  machine_type = "e2-standard-2"
+  zone         = "${var.region}-a"
   project      = var.project_id
 
   tags = ["vespa"]
@@ -33,8 +29,8 @@ resource "google_compute_instance" "vespa" {
   boot_disk {
     initialize_params {
       image = "projects/cos-cloud/global/images/family/cos-stable"
-      size  = 30  # Free tier: 30GB standard disk
-      type  = "pd-standard"  # Use standard disk for free tier
+      size  = 30
+      type  = "pd-standard"
     }
   }
 

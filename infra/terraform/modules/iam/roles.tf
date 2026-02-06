@@ -1,36 +1,5 @@
-# IAM bindings module - separate from service account creation
-# This module is called AFTER service accounts and buckets exist
+# IAM bindings - only created when service accounts and buckets are provided
 
-variable "project_id" {
-  type = string
-}
-
-variable "api_service_account" {
-  type    = string
-  default = ""
-}
-
-variable "worker_service_account" {
-  type    = string
-  default = ""
-}
-
-variable "raw_pdfs_bucket" {
-  type    = string
-  default = ""
-}
-
-variable "page_crops_bucket" {
-  type    = string
-  default = ""
-}
-
-variable "user_uploads_bucket" {
-  type    = string
-  default = ""
-}
-
-# Only create bindings if service accounts are provided
 locals {
   create_bindings = var.api_service_account != "" && var.raw_pdfs_bucket != ""
 }
