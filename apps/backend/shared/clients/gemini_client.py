@@ -4,6 +4,7 @@ Gemini Client
 Client for Gemini API for generation and vision tasks.
 """
 import os
+import json
 import base64
 from typing import List, Dict, Any, Optional, AsyncGenerator
 import httpx
@@ -103,18 +104,20 @@ Be precise and factual."""
             "generationConfig": {"temperature": 0.3, "maxOutputTokens": 4096}
         }
         
-        url = f"{self.BASE_URL}/{model}:streamGenerateContent?key={self.api_key}"
+        url = f"{self.BASE_URL}/{model}:streamGenerateContent?alt=sse&key={self.api_key}"
         
         async with httpx.AsyncClient(timeout=120) as client:
             async with client.stream("POST", url, json=payload) as response:
                 async for line in response.aiter_lines():
                     if line.startswith("data: "):
-                        import json
-                        data = json.loads(line[6:])
-                        if "candidates" in data:
-                            text = data["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                            if text:
-                                yield text
+                        try:
+                            data = json.loads(line[6:])
+                            if "candidates" in data:
+                                text = data["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                                if text:
+                                    yield text
+                        except (json.JSONDecodeError, IndexError, KeyError):
+                            pass
     
     EMBEDDING_DIM = 768
 
