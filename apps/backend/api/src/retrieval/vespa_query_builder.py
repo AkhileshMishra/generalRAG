@@ -9,18 +9,11 @@ from shared.config.settings import get_config
 
 config = get_config()
 
+def _eq(field: str, value: str) -> str:
+    """String equality filter for Vespa YQL."""
+    return f"{field} contains '{value}'"
+
 class VespaQueryBuilder:
-    """
-    Builds Vespa YQL queries with query-time access control.
-    
-    Access control is enforced via Vespa filter constraints on:
-    - tenant_id: Multi-tenant isolation (future-proof)
-    - workspace_id: Workspace isolation within tenant
-    - access_scope: 'global' or 'private'
-    - owner_user_id: Owner for private docs
-    
-    These are ALL filterable attributes in Vespa schema (fast-search, exact match).
-    """
     
     def build_rag_query(
         self,
@@ -31,45 +24,32 @@ class VespaQueryBuilder:
         include_global: bool = True,
         limit: int = None
     ) -> Tuple[str, dict]:
-        """
-        Build YQL query with Vespa-native access control filtering.
-        
-        Access control (ALL enforced in Vespa, not post-filter):
-        - tenant_id filter (exact match)
-        - workspace_id filter (exact match)  
-        - Global docs (access_scope='global') visible to all in workspace
-        - Private docs (access_scope='private') only visible to owner_user_id
-        """
         tenant_id = tenant_id or config.default_tenant_id
         workspace_id = workspace_id or config.default_workspace_id
         limit = limit or config.vespa.default_hits
         
-        # Build access control filter - ALL done in Vespa
         access_parts = []
         if include_global:
-            access_parts.append("access_scope = 'global'")
+            access_parts.append(_eq("access_scope", "global"))
         if user_id:
-            access_parts.append(f"(access_scope = 'private' AND owner_user_id = '{user_id}')")
+            access_parts.append(f"({_eq('access_scope', 'private')} AND {_eq('owner_user_id', user_id)})")
         
-        access_filter = " OR ".join(access_parts) if access_parts else "access_scope = 'global'"
+        access_filter = " OR ".join(access_parts) if access_parts else _eq("access_scope", "global")
         
-        # Full YQL with tenant isolation + access control
-        yql = f"""
-            select * from sop_elements where 
-            tenant_id = '{tenant_id}' AND
-            workspace_id = '{workspace_id}' AND
-            ({access_filter}) AND 
-            (userQuery() OR {{targetHits:{config.vespa.target_hits_dense}}}nearestNeighbor(embedding, query_embedding))
-            limit {limit}
-        """
+        yql = (
+            f"select * from sop_elements where "
+            f"{_eq('tenant_id', tenant_id)} AND "
+            f"{_eq('workspace_id', workspace_id)} AND "
+            f"({access_filter}) AND "
+            f"(userQuery() OR ({{targetHits:{config.vespa.target_hits_dense}}}nearestNeighbor(embedding, query_embedding))) "
+            f"limit {limit}"
+        )
         
-        ranking_features = {
+        return yql, {
             "query": query_text,
             "ranking.profile": config.vespa.default_profile,
             "timeout": f"{config.vespa.query_timeout_ms}ms"
         }
-        
-        return yql.strip(), ranking_features
     
     def build_hybrid_query(
         self,
@@ -81,83 +61,54 @@ class VespaQueryBuilder:
         element_types: Optional[List[str]] = None,
         limit: int = None
     ) -> Tuple[str, dict]:
-        """Build hybrid BM25 + dense query with Vespa-native filters."""
         tenant_id = tenant_id or config.default_tenant_id
         workspace_id = workspace_id or config.default_workspace_id
         limit = limit or config.vespa.default_hits
         
-        conditions = [
-            f"tenant_id = '{tenant_id}'",
-            f"workspace_id = '{workspace_id}'"
-        ]
+        conditions = [_eq("tenant_id", tenant_id), _eq("workspace_id", workspace_id)]
         
-        # Access control - enforced in Vespa
         if user_id:
             conditions.append(
-                f"(access_scope = 'global' OR "
-                f"(access_scope = 'private' AND owner_user_id = '{user_id}'))"
+                f"({_eq('access_scope', 'global')} OR "
+                f"({_eq('access_scope', 'private')} AND {_eq('owner_user_id', user_id)}))"
             )
         else:
-            conditions.append("access_scope = 'global'")
+            conditions.append(_eq("access_scope", "global"))
         
-        # Optional filters
         if doc_ids:
-            doc_filter = " OR ".join([f"doc_id = '{d}'" for d in doc_ids])
-            conditions.append(f"({doc_filter})")
-        
+            conditions.append("(" + " OR ".join([_eq("doc_id", d) for d in doc_ids]) + ")")
         if element_types:
-            type_filter = " OR ".join([f"element_type = '{t}'" for t in element_types])
-            conditions.append(f"({type_filter})")
+            conditions.append("(" + " OR ".join([_eq("element_type", t) for t in element_types]) + ")")
         
         where_clause = " AND ".join(conditions)
         
-        yql = f"""
-            select * from sop_elements where 
-            {where_clause} AND
-            (userQuery() OR {{targetHits:{config.vespa.target_hits_colbert}}}nearestNeighbor(embedding, query_embedding))
-            limit {limit}
-        """
+        yql = (
+            f"select * from sop_elements where "
+            f"{where_clause} AND "
+            f"(userQuery() OR ({{targetHits:{config.vespa.target_hits_colbert}}}nearestNeighbor(embedding, query_embedding))) "
+            f"limit {limit}"
+        )
         
-        return yql.strip(), {
-            "query": query_text, 
+        return yql, {
+            "query": query_text,
             "ranking.profile": config.vespa.hybrid_profile,
             "ranking.rerankCount": config.vespa.rerank_count
         }
     
-    def build_citation_lookup(
-        self, 
-        doc_id: str, 
-        element_id: str,
-        tenant_id: str = None,
-        workspace_id: str = None
-    ) -> str:
-        """Build query to fetch specific element for citation."""
+    def build_citation_lookup(self, doc_id: str, element_id: str, tenant_id: str = None, workspace_id: str = None) -> str:
         tenant_id = tenant_id or config.default_tenant_id
         workspace_id = workspace_id or config.default_workspace_id
-        
-        return f"""
-            select * from sop_elements where 
-            tenant_id = '{tenant_id}' AND
-            workspace_id = '{workspace_id}' AND
-            doc_id = '{doc_id}' AND 
-            element_id = '{element_id}'
-            limit 1
-        """
+        return (
+            f"select * from sop_elements where "
+            f"{_eq('tenant_id', tenant_id)} AND {_eq('workspace_id', workspace_id)} AND "
+            f"{_eq('doc_id', doc_id)} AND {_eq('element_id', element_id)} limit 1"
+        )
     
-    def build_user_docs_query(
-        self,
-        user_id: str,
-        tenant_id: str = None,
-        workspace_id: str = None
-    ) -> str:
-        """Query all private docs for a user (for listing/deletion)."""
+    def build_user_docs_query(self, user_id: str, tenant_id: str = None, workspace_id: str = None) -> str:
         tenant_id = tenant_id or config.default_tenant_id
         workspace_id = workspace_id or config.default_workspace_id
-        
-        return f"""
-            select doc_id, element_id from sop_elements where
-            tenant_id = '{tenant_id}' AND
-            workspace_id = '{workspace_id}' AND
-            access_scope = 'private' AND
-            owner_user_id = '{user_id}'
-        """
+        return (
+            f"select doc_id, element_id from sop_elements where "
+            f"{_eq('tenant_id', tenant_id)} AND {_eq('workspace_id', workspace_id)} AND "
+            f"{_eq('access_scope', 'private')} AND {_eq('owner_user_id', user_id)}"
+        )

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.auth.jwt_middleware import JWTMiddleware
 from src.chat.router import router as chat_router
+from src.chat.sessions import router as sessions_router
 from src.citations.router import router as citations_router
 from src.upload.admin_uploads import router as admin_upload_router
 from src.upload.user_uploads import router as user_upload_router
@@ -41,6 +42,7 @@ app.add_middleware(
 app.add_middleware(JWTMiddleware)
 
 app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
+app.include_router(sessions_router, prefix="/api/sessions", tags=["sessions"])
 app.include_router(citations_router, prefix="/api/citations", tags=["citations"])
 app.include_router(admin_upload_router, prefix="/api/admin/upload", tags=["admin"])
 app.include_router(user_upload_router, prefix="/api/upload", tags=["upload"])

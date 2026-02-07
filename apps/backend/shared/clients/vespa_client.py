@@ -39,7 +39,10 @@ class VespaClient:
         }
         
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(self.search_url, params=params)
+            response = await client.post(self.search_url, json=params)
+            if response.status_code != 200:
+                import logging
+                logging.getLogger(__name__).error(f"Vespa error {response.status_code}: {response.text}")
             response.raise_for_status()
             
             data = response.json()
@@ -63,7 +66,7 @@ class VespaClient:
         }
         
         async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.get(self.search_url, params=params)
+            response = await client.post(self.search_url, json=params)
             response.raise_for_status()
             
             data = response.json()

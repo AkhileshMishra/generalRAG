@@ -21,7 +21,7 @@ class GeminiClient:
         query: str,
         context: str,
         image_crops: List[Dict] = None,
-        model: str = "gemini-1.5-pro"
+        model: str = "gemini-2.0-flash"
     ) -> str:
         """
         Generate answer with RAG context and optional images.
@@ -84,7 +84,7 @@ Be precise and factual."""
         query: str,
         context: str,
         image_crops: List[Dict] = None,
-        model: str = "gemini-1.5-pro"
+        model: str = "gemini-2.0-flash"
     ) -> AsyncGenerator[str, None]:
         """Stream generation for real-time responses."""
         system_prompt = """You are a helpful assistant. Use the context to answer accurately. Cite sources with [N]."""
@@ -116,13 +116,16 @@ Be precise and factual."""
                             if text:
                                 yield text
     
-    async def embed_text(self, text: str, model: str = "text-embedding-004") -> List[float]:
+    EMBEDDING_DIM = 768
+
+    async def embed_text(self, text: str, model: str = "gemini-embedding-001") -> List[float]:
         """Generate embedding for text."""
         url = f"{self.BASE_URL}/{model}:embedContent?key={self.api_key}"
         
         payload = {
             "model": f"models/{model}",
-            "content": {"parts": [{"text": text}]}
+            "content": {"parts": [{"text": text}]},
+            "outputDimensionality": self.EMBEDDING_DIM
         }
         
         async with httpx.AsyncClient(timeout=30) as client:
@@ -135,13 +138,13 @@ Be precise and factual."""
     async def batch_embed(
         self,
         texts: List[str],
-        model: str = "text-embedding-004"
+        model: str = "gemini-embedding-001"
     ) -> List[List[float]]:
         """Batch embed multiple texts."""
         url = f"{self.BASE_URL}/{model}:batchEmbedContents?key={self.api_key}"
         
         requests = [
-            {"model": f"models/{model}", "content": {"parts": [{"text": t}]}}
+            {"model": f"models/{model}", "content": {"parts": [{"text": t}]}, "outputDimensionality": self.EMBEDDING_DIM}
             for t in texts
         ]
         

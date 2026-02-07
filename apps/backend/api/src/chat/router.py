@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
@@ -6,6 +7,7 @@ from pydantic import BaseModel
 from src.auth.jwt_middleware import get_current_user, get_current_user_optional
 from src.retrieval.vespa_query_builder import VespaQueryBuilder
 from src.retrieval.context_packer import ContextPacker
+from src.db import get_db, ChatSession, ChatMessage
 from shared.clients.vespa_client import VespaClient
 from shared.clients.gemini_client import GeminiClient
 
@@ -42,10 +44,14 @@ context_packer = ContextPacker()
 @router.post("/", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
-    current_user: Optional[dict] = Depends(get_current_user_optional)
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+    db=Depends(get_db),
 ):
     user_id = current_user["user_id"] if current_user else None
     tenant_id = current_user.get("tenant_id") if current_user else None
+
+    # Ensure session exists
+    session_id = request.session_id or str(uuid.uuid4())
     
     # Generate query embedding for vector search
     query_embedding = await gemini_client.embed_text(request.message)
@@ -86,11 +92,19 @@ async def chat(
         )
         for r in results[:5]
     ]
-    
+
+    # Persist messages
+    try:
+        db.add(ChatMessage(id=str(uuid.uuid4()), session_id=session_id, role="user", content=request.message))
+        db.add(ChatMessage(id=str(uuid.uuid4()), session_id=session_id, role="assistant", content=answer, citations=[c.dict() for c in citations]))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
     return ChatResponse(
         answer=answer,
         citations=citations,
-        session_id=request.session_id or "default"
+        session_id=session_id
     )
 
 

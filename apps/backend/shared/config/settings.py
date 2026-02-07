@@ -38,9 +38,9 @@ class IngestionConfig:
 class GeminiConfig:
     """Gemini API settings."""
     # Models - using Gemini 1.5 Pro (2.5 not yet available)
-    vision_model: str = "gemini-1.5-pro"
-    generation_model: str = "gemini-1.5-pro"
-    embedding_model: str = "text-embedding-004"
+    vision_model: str = "gemini-2.0-flash"
+    generation_model: str = "gemini-2.0-flash"
+    embedding_model: str = "gemini-embedding-001"
     
     # Limits - NEVER upload full PDFs, only page images/crops
     max_image_size_mb: float = 20.0

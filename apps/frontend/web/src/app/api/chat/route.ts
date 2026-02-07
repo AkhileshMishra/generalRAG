@@ -4,7 +4,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = request.cookies.get('auth-token')?.value || request.headers.get('authorization')
     
-    const response = await fetch(`${process.env.BACKEND_URL}/chat/stream`, {
+    const response = await fetch(`${process.env.API_URL || 'http://localhost:8000'}/api/chat/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

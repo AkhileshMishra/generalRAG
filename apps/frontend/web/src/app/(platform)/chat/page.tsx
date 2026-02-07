@@ -5,35 +5,26 @@ import { useRouter } from 'next/navigation'
 
 export default function NewChatPage() {
   const router = useRouter()
-  const [isCreating, setIsCreating] = useState(true)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
-    const createSession = async () => {
-      try {
-        const response = await fetch('/api/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        })
-        
-        if (!response.ok) throw new Error('Failed to create session')
-        
-        const { sessionId } = await response.json()
-        router.push(`/chat/${sessionId}`)
-      } catch (error) {
-        console.error('Error creating session:', error)
-        setIsCreating(false)
-      }
-    }
-
-    createSession()
+    fetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+      .then(res => { if (!res.ok) throw new Error(); return res.json() })
+      .then(data => router.replace(`/chat/${data.sessionId}`))
+      .catch(() => setError(true))
   }, [router])
 
-  if (isCreating) {
+  if (error) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p>Creating new chat session...</p>
+          <p className="mb-4">Failed to create chat session.</p>
+          <button onClick={() => { setError(false); location.reload() }} className="px-4 py-2 bg-blue-600 text-white rounded">
+            Retry
+          </button>
         </div>
       </div>
     )
@@ -41,7 +32,7 @@ export default function NewChatPage() {
 
   return (
     <div className="flex items-center justify-center h-full">
-      <p>Failed to create chat session. Please try again.</p>
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto" />
     </div>
   )
 }
