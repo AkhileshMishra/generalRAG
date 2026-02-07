@@ -102,8 +102,14 @@ async def delete_user_document(doc_id: str, user: dict = Depends(get_current_use
 async def trigger_user_ingestion(doc_id: str, metadata: dict):
     """Trigger the worker to process user document."""
     import httpx
-    async with httpx.AsyncClient(timeout=30) as client:
-        await client.post(
-            f"{WORKER_URL}/ingest/user",
-            json={"doc_id": doc_id, "metadata": metadata}
-        )
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                f"{WORKER_URL}/ingest/user",
+                json={"doc_id": doc_id, "metadata": metadata}
+            )
+            logger.info(f"Worker response: {resp.status_code}")
+    except Exception as e:
+        logger.error(f"Failed to trigger worker: {e}")
