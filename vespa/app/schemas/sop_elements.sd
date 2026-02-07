@@ -106,10 +106,10 @@ schema sop_elements {
     rank-profile colbert_rerank inherits hybrid {
         inputs {
             query(query_embedding) tensor<float>(x[768])
-            query(query_tokens) tensor<float>(token{}, x[128])
+            query(query_tokens) tensor<float>(qt{}, x[128])
         }
         function colbert_maxsim() {
-            expression: sum(reduce(sum(query(query_tokens) * attribute(colbert_tokens), x), max, token), token)
+            expression: sum(reduce(sum(query(query_tokens) * attribute(colbert_tokens), x), max, token), qt)
         }
         second-phase {
             expression: colbert_maxsim()
@@ -121,7 +121,7 @@ schema sop_elements {
     rank-profile rag inherits colbert_rerank {
         inputs {
             query(query_embedding) tensor<float>(x[768])
-            query(query_tokens) tensor<float>(token{}, x[128])
+            query(query_tokens) tensor<float>(qt{}, x[128])
         }
         second-phase {
             expression: colbert_maxsim() * 0.6 + closeness(field, embedding) * 0.3 + bm25(content_text) * 0.1

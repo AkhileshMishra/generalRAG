@@ -2,11 +2,7 @@
 <services version="1.0">
     <container id="default" version="1.0">
         <document-api/>
-        <search>
-            <chain id="default" inherits="vespa">
-                <searcher id="ai.vespa.search.llm.RAGSearcher" bundle="llm-rag"/>
-            </chain>
-        </search>
+        <search/>
         <document-processing/>
         <nodes>
             <node hostalias="node1"/>

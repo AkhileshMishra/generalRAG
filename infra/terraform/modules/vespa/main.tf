@@ -28,8 +28,8 @@ resource "google_compute_instance" "vespa" {
 
   boot_disk {
     initialize_params {
-      image = "projects/cos-cloud/global/images/family/cos-stable"
-      size  = 30
+      image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"
+      size  = 50
       type  = "pd-standard"
     }
   }
@@ -38,24 +38,26 @@ resource "google_compute_instance" "vespa" {
     subnetwork = var.subnet_id
   }
 
-  metadata = {
-    gce-container-declaration = yamlencode({
-      spec = {
-        containers = [{
-          image = "vespaengine/vespa:8"
-          volumeMounts = [{
-            name      = "vespa-data"
-            mountPath = "/opt/vespa/var"
-          }]
-        }]
-        volumes = [{
-          name = "vespa-data"
-          hostPath = { path = "/mnt/disks/vespa-data" }
-        }]
-        restartPolicy = "Always"
-      }
-    })
-  }
+  metadata_startup_script = <<-EOF
+    #!/bin/bash
+    set -e
+    if ! command -v docker &> /dev/null; then
+      apt-get update -y
+      apt-get install -y docker.io
+      systemctl enable docker
+      systemctl start docker
+    fi
+    mkdir -p /opt/vespa-data
+    chown -R 1000:1000 /opt/vespa-data
+    if ! docker ps --format '{{.Names}}' | grep -q '^vespa$'; then
+      docker rm -f vespa 2>/dev/null || true
+      docker pull vespaengine/vespa:8
+      docker run -d --name vespa --restart=always \
+        -p 8080:8080 -p 19071:19071 -p 19092:19092 \
+        -v /opt/vespa-data:/opt/vespa/var \
+        vespaengine/vespa:8
+    fi
+  EOF
 
   service_account {
     email  = var.vespa_service_account
@@ -68,7 +70,7 @@ resource "google_compute_instance" "vespa" {
   }
 
   shielded_instance_config {
-    enable_secure_boot = true
+    enable_secure_boot = false
   }
 }
 
