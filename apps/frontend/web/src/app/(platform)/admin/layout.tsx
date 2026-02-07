@@ -13,12 +13,12 @@ export default function AdminLayout({
   const router = useRouter()
 
   useEffect(() => {
-    if (!user || user.role !== 'admin') {
+    if (!user || !user.is_admin) {
       router.push('/chat')
     }
   }, [user, router])
 
-  if (!user || user.role !== 'admin') {
+  if (!user || !user.is_admin) {
     return null
   }
 

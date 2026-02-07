@@ -36,7 +36,7 @@ export function Sidebar() {
         </div>
       </div>
       
-      {user?.role === 'admin' && (
+      {user?.is_admin && (
         <a href="/admin" className="block p-2 text-gray-300 hover:text-white">
           Admin
         </a>

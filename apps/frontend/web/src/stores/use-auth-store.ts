@@ -5,16 +5,15 @@ interface User {
   id: string
   email: string
   name: string
-  role: 'admin' | 'user'
+  is_admin: boolean
 }
 
 interface AuthState {
   user: User | null
   token: string | null
   isAuthenticated: boolean
-  login: (token: string) => void
-  logout: () => void
-  setUser: (user: User) => void
+  login: (token: string, user: User) => void
+  logout: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -23,15 +22,13 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
-      login: (token: string) =>
-        set({ token, isAuthenticated: true }),
-      logout: () =>
-        set({ user: null, token: null, isAuthenticated: false }),
-      setUser: (user: User) =>
-        set({ user }),
+      login: (token: string, user: User) =>
+        set({ token, user, isAuthenticated: true }),
+      logout: async () => {
+        await fetch('/api/auth/logout', { method: 'POST' })
+        set({ user: null, token: null, isAuthenticated: false })
+      },
     }),
-    {
-      name: 'auth-storage',
-    }
+    { name: 'auth-storage' }
   )
 )
