@@ -39,6 +39,30 @@ jobs:
         working-directory: infra/terraform/envs/prod
         run: terraform init
 
+      - name: Import Existing Resources
+        working-directory: infra/terraform/envs/prod
+        run: |
+          # Import resources that already exist (ignore errors if already imported)
+          terraform import -var="project_id=${{ secrets.GCP_PROJECT_ID }}" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="github_repo=${{ github.repository }}" \
+            module.artifact_registry.google_artifact_registry_repository.generalrag \
+            "projects/${{ secrets.GCP_PROJECT_ID }}/locations/${{ env.REGION }}/repositories/generalrag" 2>/dev/null || true
+
+          terraform import -var="project_id=${{ secrets.GCP_PROJECT_ID }}" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="github_repo=${{ github.repository }}" \
+            module.secrets.google_secret_manager_secret.gemini_api_key \
+            "projects/${{ secrets.GCP_PROJECT_ID }}/secrets/gemini-api-key" 2>/dev/null || true
+
+          terraform import -var="project_id=${{ secrets.GCP_PROJECT_ID }}" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="github_repo=${{ github.repository }}" \
+            module.secrets.google_secret_manager_secret.vespa_endpoint \
+            "projects/${{ secrets.GCP_PROJECT_ID }}/secrets/vespa-endpoint" 2>/dev/null || true
+
+          terraform import -var="project_id=${{ secrets.GCP_PROJECT_ID }}" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="github_repo=${{ github.repository }}" \
+            module.secrets.google_secret_manager_secret.db_connection_string \
+            "projects/${{ secrets.GCP_PROJECT_ID }}/secrets/db-connection-string" 2>/dev/null || true
+
+          terraform import -var="project_id=${{ secrets.GCP_PROJECT_ID }}" -var="db_password=${{ secrets.DB_PASSWORD }}" -var="github_repo=${{ github.repository }}" \
+            module.secrets.google_secret_manager_secret.jwt_secret \
+            "projects/${{ secrets.GCP_PROJECT_ID }}/secrets/jwt-secret" 2>/dev/null || true
+
       - name: Terraform Plan
         working-directory: infra/terraform/envs/prod
         run: terraform plan -out=tfplan
